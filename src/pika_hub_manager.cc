@@ -40,15 +40,19 @@ Status PikaHubManager::AddHub(const std::string hub_ip, int hub_port,
     // need start
   } else if (hub_stage_ == STARTING) {
     // we handle only one request
+    LOG(INFO) << "Hub sender is starting";
     return Status::OK();
   } else if (hub_stage_ == DEGRADE) {
     // kill the left connection
+    LOG(INFO) << "Kill all connection left";
     hub_receiver_->KillAllConns();
   } else if (hub_stage_ == STARTED && 
              filenum != hub_filenum_ && con_offset != hub_con_offset_) {
     // need reset
+    LOG(INFO) << "Need reset hub senders";
   } else {
     // already exist
+    LOG(INFO) << "Hub senders already exist";
     return Status::OK();
   }
 
@@ -108,9 +112,12 @@ Status PikaHubManager::ResetSenders() {
 bool PikaHubManager::GetNextFilenum(PikaHubSenderThread* thread,
                                     uint32_t* filenum, uint64_t* con_offset) {
   bool should_wait = true;
+  {
+  slash::MutexLock l(&hub_stage_protector_);
   if (hub_stage_ < READY) {
     // STOPED, STARTING, DEGRADE
     return should_wait;
+  }
   }
 
   uint32_t cur_filenum;
@@ -146,11 +153,11 @@ bool PikaHubManager::GetNextFilenum(PikaHubSenderThread* thread,
       *filenum = new_filenum;
       *con_offset = 0;
 
-      DLOG(INFO) << "Hub sending window: " <<
+      LOG(INFO) << "Hub sending window: " <<
         sending_window_.left << "-" << sending_window_.right;
-      DLOG(INFO) << "Hub senders' map: ";
+      LOG(INFO) << "Hub senders' map: ";
       for (auto& info : working_map_) {
-        DLOG(INFO) << "    ---- Thread " << info.first <<
+        LOG(INFO) << "    ---- Thread " << info.first <<
           " processing " << info.second;
       }
     }
@@ -229,6 +236,7 @@ bool PikaHubSenderThread::ResetStatus() {
   if (should_wait) {
     return true;
   }
+  LOG(INFO) << "Handle new file: " << filenum_ << ":" << con_offset_;
 
   std::string confile = NewFileName(g_pika_server->logger_->filename, filenum_);
   if (!slash::FileExists(confile)) {
@@ -419,19 +427,20 @@ Status PikaHubSenderThread::Consume(std::string &scratch) {
 // Get a whole message; 
 // the status will be OK, IOError or Corruption;
 Status PikaHubSenderThread::Parse(std::string &scratch) {
-  scratch.clear();
   Status s;
   uint32_t pro_num;
   uint64_t pro_offset;
 
   while (!should_stop()) {
+    scratch.clear();
     g_pika_server->logger_->GetProducerStatus(&pro_num, &pro_offset);
     if (filenum_ != pro_num || con_offset_ != pro_offset) {
       status_ = WORKING;
       s = Consume(scratch);
-    } else {
+    } else if (!should_reset_ && !s.IsEndFile()) {
       sleep(1);
       status_ = WAITING;
+      continue;
     }
 
     // Notify manager to get next File
@@ -441,6 +450,7 @@ Status PikaHubSenderThread::Parse(std::string &scratch) {
       if (should_wait) {
         sleep(1);
       } else {
+        LOG(INFO) << "EOF then working on new file: " << filenum_;
         should_reset_ = false;
         status_ = WORKING;
       }
@@ -474,21 +484,24 @@ void* PikaHubSenderThread::ThreadMain() {
 
   bool should_wait = true;
   while (!should_stop()) {
-    should_wait = ResetStatus();
-    if (should_wait) {
-      status_ = UNSTARTED;
-      sleep(1);
-      continue;
-    } else {
-      status_ = WORKING;
-      should_reset_ = false;
+    if (should_reset_) {
+      should_wait = ResetStatus();
+      if (should_wait) {
+        status_ = UNSTARTED;
+        sleep(1);
+        continue;
+      } else {
+        LOG(INFO) << "Thread working on file: " << filenum_;
+        status_ = WORKING;
+        should_reset_ = false;
+      }
     }
     // 1. Connect to slave
     result = cli_->Connect(hub_ip_, hub_port_, g_pika_server->host());
-    LOG(INFO) << "Hub Sender Connect hub(" << hub_ip_ << ":" <<
-      hub_port_ << ") " << result.ToString();
-
     if (result.ok()) {
+      LOG(INFO) << "Hub Sender Connect hub(" << hub_ip_ << ":" <<
+        hub_port_ << ") " << result.ToString();
+
       cli_->set_send_timeout(timeout_ms_);
       // Binlog sending loop
       while (!should_reset_) {
@@ -506,13 +519,16 @@ void* PikaHubSenderThread::ThreadMain() {
         }
 
         // 3. After successful parse, we send msg;
+        if (!cli_->Available()) {
+          last_send_flag = false;
+          break;
+        }
         result = cli_->Send(&scratch);
         if (result.ok()) {
           last_send_flag = true;
         } else {
           last_send_flag = false;
-          DLOG(INFO) << "Hub Sender send hub(" << hub_ip_ << ":" <<
-            hub_port_ << ") failed,  " << result.ToString();
+          LOG(INFO) << "Hub Sender failed: " << result.ToString();
           break;
         }
       }

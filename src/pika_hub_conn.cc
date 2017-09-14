@@ -47,7 +47,7 @@ int PikaHubConn::DealMessage() {
   }
 
   Cmd* c_ptr = GetCmdFromTable(opt, *cmds_);
-  std::string dummy_binlog_info;
+  std::string dummy_binlog_info("X");
 
   g_pika_server->logger_->Lock();
   g_pika_server->logger_->Put(c_ptr->ToBinlog(

@@ -46,6 +46,10 @@ class PikaHubSenderThread : public pink::Thread {
     return status_;
   }
 
+  void CloseClient() {
+    cli_.reset(pink::NewRedisCli());
+  }
+
  private:
   bool ResetStatus();
   int TrimOffset();
@@ -154,10 +158,14 @@ class PikaHubManager {
     hub_stage_ = STARTED;
   }
   void StopHub(int connnection_num) {
-    if (connnection_num == 1)
+    if (connnection_num == 1) {
       hub_stage_ = DEGRADE;
-    else
+    } else {
       hub_stage_ = STOPED;
+      for (int i = 0; i < kMaxHubSender; i++) {
+        sender_threads_[i]->CloseClient();
+      }
+    }
   }
 
  private:
