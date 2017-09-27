@@ -47,6 +47,10 @@ class PikaHubSenderThread : public pink::Thread {
   }
 
   void CloseClient() {
+    cli_->Close();
+    // Close socket connnection
+    std::string dummy("dummy");
+    while (cli_->Send(&dummy).ok());
     cli_.reset(pink::NewRedisCli());
   }
 
