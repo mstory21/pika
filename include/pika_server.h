@@ -94,7 +94,11 @@ class PikaServer {
     // slave_mutex has been locked from exterior
     int64_t sid = sid_;
     sid_++;
-    return sid;
+    if (sid == double_master_sid_) {
+      return GenSid();
+    } else {
+      return sid;
+    }
   }
 
   void DeleteSlave(int fd); // hb_fd
@@ -127,7 +131,21 @@ class PikaServer {
   void WaitDBSyncFinish();
   void KillBinlogSenderConn();
 
+  /*
+   * Double master use
+   */
+  bool DoubleMasterMode() {
+    return double_master_mode_;
+  }
+
+  int64_t DoubleMasterSid() {
+    return double_master_sid_;
+  }
+
+  bool IsDoubleMaster(const std::string master_ip, int master_port);
+
   void Start();
+
   void Exit() {
     exit_ = true;
   }
@@ -366,6 +384,11 @@ class PikaServer {
   int role_;
   bool force_full_sync_;
 
+  /*
+   * Double master use
+   */
+  int64_t double_master_sid_;
+  bool double_master_mode_;
   /*
    * Bgsave use
    */

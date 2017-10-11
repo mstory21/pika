@@ -38,6 +38,8 @@ PikaServer::PikaServer() :
   repl_state_(PIKA_REPL_NO_CONNECT),
   role_(PIKA_ROLE_SINGLE),
   force_full_sync_(false),
+  double_master_sid_(0),
+  double_master_mode_(false),
   bgsave_engine_(NULL),
   purging_(false),
   binlogbg_exit_(false),
@@ -100,6 +102,11 @@ PikaServer::PikaServer() :
 
   pthread_rwlock_init(&state_protector_, NULL);
   logger_ = new Binlog(g_pika_conf->log_path(), g_pika_conf->binlog_file_size());
+
+  uint64_t double_recv_offset;
+  uint32_t double_recv_num;
+  logger_->GetDoubleRecvInfo(&double_recv_num, &double_recv_offset);
+  LOG(INFO) << "double recv info: filenum " << double_recv_num << " offset " << double_recv_offset;
 }
 
 PikaServer::~PikaServer() {
@@ -279,7 +286,7 @@ void PikaServer::Start() {
 
   time(&start_time_s_);
 
-  //SetMaster("127.0.0.1", 9221);
+  // SetMaster("127.0.0.1", 9221);
   std::string slaveof = g_pika_conf->slaveof();
   if (!slaveof.empty()) {
     int32_t sep = slaveof.find(":");
@@ -289,6 +296,20 @@ void PikaServer::Start() {
       LOG(FATAL) << "you will slaveof yourself as the config file, please check";
     } else {
       SetMaster(master_ip, master_port);
+    }
+  }
+
+
+  // Double master mode
+  if (!g_pika_conf->double_master_ip().empty()) {
+    std::string double_master_ip = g_pika_conf->double_master_ip();
+    int32_t double_master_port = g_pika_conf->double_master_port();
+    double_master_sid_ = std::stoi(g_pika_conf->double_master_sid());
+    if ((double_master_ip == "127.0.0.1" || double_master_ip == host_) && double_master_port == port_) {
+    LOG(FATAL) << "set yourself as the peer-master, please check";
+    } else {
+      double_master_mode_ = true;
+      SetMaster(double_master_ip, double_master_port);
     }
   }
 
@@ -330,6 +351,9 @@ void PikaServer::DeleteSlave(const std::string& ip, int64_t port) {
   slash::RWLock l(&state_protector_, true);
   if (slave_num == 0) {
     role_ &= ~PIKA_ROLE_MASTER;
+    if (DoubleMasterMode()) {
+      role_ |= PIKA_ROLE_DOUBLE_MASTER;
+    }
   }
 }
 
@@ -355,6 +379,9 @@ void PikaServer::DeleteSlave(int fd) {
   slash::RWLock l(&state_protector_, true);
   if (slave_num == 0) {
     role_ &= ~PIKA_ROLE_MASTER;
+    if (DoubleMasterMode()) {
+      role_ |= PIKA_ROLE_DOUBLE_MASTER; 
+    }
   }
 }
 
@@ -397,6 +424,15 @@ bool PikaServer::ChangeDb(const std::string& new_path) {
   return true;
 }
 
+bool PikaServer::IsDoubleMaster(const std::string master_ip, int master_port) {
+  if ((g_pika_conf->double_master_ip() == master_ip || host() == master_ip) && g_pika_conf->double_master_port() == master_port) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+
 void PikaServer::MayUpdateSlavesMap(int64_t sid, int32_t hb_fd) {
   slash::MutexLock l(&slave_mutex_);
   std::vector<SlaveItem>::iterator iter = slaves_.begin();
@@ -406,6 +442,13 @@ void PikaServer::MayUpdateSlavesMap(int64_t sid, int32_t hb_fd) {
       iter->hb_fd = hb_fd;
       iter->stage = SLAVE_ITEM_STAGE_TWO;
       LOG(INFO) << "New Master-Slave connection established successfully, Slave host: " << iter->ip_port;
+      
+      // If receive 'spci' from the peer-master
+      if (DoubleMasterMode() && repl_state_ == PIKA_REPL_NO_CONNECT && iter->sid == double_master_sid_) {
+        std::string double_master_ip = g_pika_conf->double_master_ip();
+        int32_t double_master_port = g_pika_conf->double_master_port();
+        SetMaster(double_master_ip, double_master_port);
+      }
       break;
     }
     iter++;
@@ -429,7 +472,11 @@ int64_t PikaServer::TryAddSlave(const std::string& ip, int64_t port) {
   // Not exist, so add new
   LOG(INFO) << "Add new slave, " << ip << ":" << port;
   SlaveItem s;
-  s.sid = GenSid();
+  if (DoubleMasterMode() && IsDoubleMaster(ip, port)) {  // Double master mode
+    s.sid = double_master_sid_;
+  } else {
+    s.sid = GenSid();
+  }
   s.ip_port = ip_port;
   s.port = port;
   s.hb_fd = -1;
@@ -482,6 +529,7 @@ int32_t PikaServer::GetSlaveListString(std::string& slave_list_str) {
       << ":ip=" << slave_ip_port.substr(0, slave_ip_port.find(":"))
       << ",port=" << slave_ip_port.substr(slave_ip_port.find(":")+1)
       << ",state=" << ((*iter).stage == SLAVE_ITEM_STAGE_TWO ? "online" : "offline")
+      << ",sid=" << (*iter).sid
       << "\r\n";
   }
   slave_list_str.assign(tmp_stream.str());
@@ -490,7 +538,11 @@ int32_t PikaServer::GetSlaveListString(std::string& slave_list_str) {
 
 void PikaServer::BecomeMaster() {
   slash::RWLock l(&state_protector_, true);
-  role_ |= PIKA_ROLE_MASTER;
+  if (double_master_mode_) {
+    role_ |= PIKA_ROLE_DOUBLE_MASTER;
+  } else {
+    role_ |= PIKA_ROLE_MASTER;
+  }
 }
 
 bool PikaServer::SetMaster(std::string& master_ip, int master_port) {
@@ -501,11 +553,18 @@ bool PikaServer::SetMaster(std::string& master_ip, int master_port) {
   if ((role_ ^ PIKA_ROLE_SLAVE) && repl_state_ == PIKA_REPL_NO_CONNECT) {
     master_ip_ = master_ip;
     master_port_ = master_port;
-    role_ |= PIKA_ROLE_SLAVE;
-    repl_state_ = PIKA_REPL_CONNECT;
-    LOG(INFO) << "open read-only mode";
-    g_pika_conf->SetReadonly(true);
-    return true;
+    if (!double_master_mode_) {
+      role_ |= PIKA_ROLE_SLAVE;
+      repl_state_ = PIKA_REPL_CONNECT;
+      LOG(INFO) << "Open read-only mode";
+      g_pika_conf->SetReadonly(true);
+      return true;
+    } else {
+      role_ |= PIKA_ROLE_DOUBLE_MASTER;
+      repl_state_ = PIKA_REPL_CONNECT;
+      LOG(INFO) << "In double-master mode, do not open read-only mode";
+      return true;
+    }
   }
   return false;
 }
@@ -620,7 +679,12 @@ void PikaServer::RemoveMaster() {
   {
   slash::RWLock l(&state_protector_, true);
   repl_state_ = PIKA_REPL_NO_CONNECT;
-  role_ &= ~PIKA_ROLE_SLAVE;
+  if (DoubleMasterMode()) {
+    role_ &= ~PIKA_ROLE_DOUBLE_MASTER;
+  } else {
+    role_ &= ~PIKA_ROLE_SLAVE;
+  }
+
   master_ip_ = "";
   master_port_ = -1;
   }
@@ -687,9 +751,13 @@ void PikaServer::DoDBSync(void* arg) {
 
 void PikaServer::DBSyncSendFile(const std::string& ip, int port) {
   std::string bg_path;
+  uint32_t binlog_filenum;
+  uint64_t binlog_offset;
   {
     slash::MutexLock l(&bgsave_protector_);
     bg_path = bgsave_info_.path;
+    binlog_filenum = bgsave_info_.filenum;
+    binlog_offset = bgsave_info_.offset;
   }
   // Get all files need to send
   std::vector<std::string> descendant;
@@ -741,6 +809,14 @@ void PikaServer::DBSyncSendFile(const std::string& ip, int port) {
   }
   if (0 == ret) {
     LOG(INFO) << "rsync send files success";
+    // If receiver is the peer-master, 
+    // need to update receive binlog info
+    if ((g_pika_conf->double_master_ip() == ip || host() == ip)
+        && (g_pika_conf->double_master_port() + 3000) == port) {
+      // Update Recv Info
+      logger_->SetDoubleRecvInfo(binlog_filenum, binlog_offset);
+      LOG(INFO) << "Update recv info filenum: " << binlog_filenum << " offset: " << binlog_offset;
+    }
   }
 }
 
@@ -751,7 +827,7 @@ Status PikaServer::AddBinlogSender(const std::string& ip, int64_t port,
     uint32_t filenum, uint64_t con_offset) {
   // Sanity check
   if (con_offset > logger_->file_size()) {
-    return Status::InvalidArgument("AddBinlogSender invalid offset");
+    return Status::InvalidArgument("AddBinlogSender invalid binlog offset");
   }
   uint32_t cur_filenum = 0;
   uint64_t cur_offset = 0;
@@ -770,6 +846,11 @@ Status PikaServer::AddBinlogSender(const std::string& ip, int64_t port,
   std::string confile = NewFileName(logger_->filename, filenum);
   if (!slash::FileExists(confile)) {
     // Not found binlog specified by filenum
+    // If in double-master mode, return error status
+    if (DoubleMasterMode() && IsDoubleMaster(ip, port) && filenum != UINT32_MAX) {
+      return Status::InvalidArgument("AddBinlogSender invalid binlog offset");
+    }
+
     TryDBSync(ip, port + 3000, cur_filenum);
     return Status::Incomplete("Bgsaving and DBSync first");
   }
@@ -1188,9 +1269,7 @@ void PikaServer::AutoDeleteExpiredDump() {
   if (slash::GetChildren(db_sync_path, dump_dir) != 0) {
     return;
   }
-  for (size_t i = 0; i < dump_dir.size(); i++) {
-    LOG(INFO) << dump_dir[i];
-  }
+  
   // Handle dump directory
   for (size_t i = 0; i < dump_dir.size(); i++) {
     // Parse filename
