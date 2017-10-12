@@ -78,11 +78,14 @@ void BinlogBGWorker::DoBinlogBG(void* arg) {
         server_id = g_pika_conf->server_id();
       }
       g_pika_server->logger_->Lock();
-      g_pika_server->logger_->Put(c_ptr->ToBinlog(
+      std::string binlog = c_ptr->ToBinlog(
           argv,
           server_id,
           dummy_binlog_info,
-          false));
+          false /* need not send to hub */);
+      if (!binlog.empty()) {
+        g_pika_server->logger_->Put(binlog);
+      }
       g_pika_server->logger_->Unlock();
       if (g_pika_server->DoubleMasterMode()) {
         // In double moaster mode, update binlog recv info

@@ -130,10 +130,9 @@ void IncrCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
 }
 
 void IncrCmd::Do() {
-  std::string new_value;
-  nemo::Status s = g_pika_server->db()->Incrby(key_, 1, new_value);
+  nemo::Status s = g_pika_server->db()->Incrby(key_, 1, new_value_);
   if (s.ok()) {
-   res_.AppendContent(":" + new_value);
+   res_.AppendContent(":" + new_value_);
    SlotKeyAdd("k", key_);
   } else if (s.IsCorruption() && s.ToString() == "Corruption: value is not a integer") {
     res_.SetRes(CmdRes::kInvalidInt);
@@ -143,6 +142,30 @@ void IncrCmd::Do() {
     res_.SetRes(CmdRes::kErrOther, s.ToString());
   }
   return;
+}
+
+std::string IncrCmd::ToBinlog(
+    const PikaCmdArgsType& argv,
+    const std::string& server_id,
+    const std::string& binlog_info,
+    bool need_send_to_hub) {
+  std::string res;
+  res.reserve(RAW_ARGS_LEN);
+  RedisAppendLen(res, 3 + 4, "*");
+
+  // to set cmd
+  std::string set_cmd("set");
+  RedisAppendLen(res, set_cmd.size(), "$");
+  RedisAppendContent(res, set_cmd);
+  // key
+  RedisAppendLen(res, key_.size(), "$");
+  RedisAppendContent(res, key_);
+  // value
+  RedisAppendLen(res, new_value_.size(), "$");
+  RedisAppendContent(res, new_value_);
+
+  AppendAffiliatedInfo(res, server_id, binlog_info, need_send_to_hub);
+  return res;
 }
 
 void IncrbyCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
@@ -159,10 +182,9 @@ void IncrbyCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) 
 }
 
 void IncrbyCmd::Do() {
-  std::string new_value;
-  nemo::Status s = g_pika_server->db()->Incrby(key_, by_, new_value);
+  nemo::Status s = g_pika_server->db()->Incrby(key_, by_, new_value_);
   if (s.ok()) {
-    res_.AppendContent(":" + new_value);
+    res_.AppendContent(":" + new_value_);
     SlotKeyAdd("k", key_);
   } else if (s.IsCorruption() && s.ToString() == "Corruption: value is not a integer") {
     res_.SetRes(CmdRes::kInvalidInt);
@@ -172,6 +194,30 @@ void IncrbyCmd::Do() {
     res_.SetRes(CmdRes::kErrOther, s.ToString());
   }
   return;
+}
+
+std::string IncrbyCmd::ToBinlog(
+    const PikaCmdArgsType& argv,
+    const std::string& server_id,
+    const std::string& binlog_info,
+    bool need_send_to_hub) {
+  std::string res;
+  res.reserve(RAW_ARGS_LEN);
+  RedisAppendLen(res, 3 + 4, "*");
+
+  // to set cmd
+  std::string set_cmd("set");
+  RedisAppendLen(res, set_cmd.size(), "$");
+  RedisAppendContent(res, set_cmd);
+  // key
+  RedisAppendLen(res, key_.size(), "$");
+  RedisAppendContent(res, key_);
+  // value
+  RedisAppendLen(res, new_value_.size(), "$");
+  RedisAppendContent(res, new_value_);
+
+  AppendAffiliatedInfo(res, server_id, binlog_info, need_send_to_hub);
+  return res;
 }
 
 void IncrbyfloatCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
@@ -188,11 +234,10 @@ void IncrbyfloatCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_i
 }
 
 void IncrbyfloatCmd::Do() {
-  std::string new_value;
-  nemo::Status s = g_pika_server->db()->Incrbyfloat(key_, by_, new_value);
+  nemo::Status s = g_pika_server->db()->Incrbyfloat(key_, by_, new_value_);
   if (s.ok()) {
-    res_.AppendStringLen(new_value.size());
-    res_.AppendContent(new_value);
+    res_.AppendStringLen(new_value_.size());
+    res_.AppendContent(new_value_);
     SlotKeyAdd("k", key_);
   } else if (s.IsCorruption() && s.ToString() == "Corruption: value is not a float"){
     res_.SetRes(CmdRes::kInvalidFloat);
@@ -202,6 +247,30 @@ void IncrbyfloatCmd::Do() {
     res_.SetRes(CmdRes::kErrOther, s.ToString());
   }
   return;
+}
+
+std::string IncrbyfloatCmd::ToBinlog(
+    const PikaCmdArgsType& argv,
+    const std::string& server_id,
+    const std::string& binlog_info,
+    bool need_send_to_hub) {
+  std::string res;
+  res.reserve(RAW_ARGS_LEN);
+  RedisAppendLen(res, 3 + 4, "*");
+
+  // to set cmd
+  std::string set_cmd("set");
+  RedisAppendLen(res, set_cmd.size(), "$");
+  RedisAppendContent(res, set_cmd);
+  // key
+  RedisAppendLen(res, key_.size(), "$");
+  RedisAppendContent(res, key_);
+  // value
+  RedisAppendLen(res, new_value_.size(), "$");
+  RedisAppendContent(res, new_value_);
+
+  AppendAffiliatedInfo(res, server_id, binlog_info, need_send_to_hub);
+  return res;
 }
 
 void DecrCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
@@ -214,10 +283,9 @@ void DecrCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
 }
 
 void DecrCmd::Do() {
-  std::string new_value;
-  nemo::Status s = g_pika_server->db()->Decrby(key_, 1, new_value);
+  nemo::Status s = g_pika_server->db()->Decrby(key_, 1, new_value_);
   if (s.ok()) {
-   res_.AppendContent(":" + new_value);
+   res_.AppendContent(":" + new_value_);
   } else if (s.IsCorruption() && s.ToString() == "Corruption: value is not a integer") {
     res_.SetRes(CmdRes::kInvalidInt);
   } else if (s.IsInvalidArgument()) {
@@ -226,6 +294,30 @@ void DecrCmd::Do() {
     res_.SetRes(CmdRes::kErrOther, s.ToString());
   }
   return;
+}
+
+std::string DecrCmd::ToBinlog(
+    const PikaCmdArgsType& argv,
+    const std::string& server_id,
+    const std::string& binlog_info,
+    bool need_send_to_hub) {
+  std::string res;
+  res.reserve(RAW_ARGS_LEN);
+  RedisAppendLen(res, 3 + 4, "*");
+
+  // to set cmd
+  std::string set_cmd("set");
+  RedisAppendLen(res, set_cmd.size(), "$");
+  RedisAppendContent(res, set_cmd);
+  // key
+  RedisAppendLen(res, key_.size(), "$");
+  RedisAppendContent(res, key_);
+  // value
+  RedisAppendLen(res, new_value_.size(), "$");
+  RedisAppendContent(res, new_value_);
+
+  AppendAffiliatedInfo(res, server_id, binlog_info, need_send_to_hub);
+  return res;
 }
 
 void DecrbyCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
@@ -242,10 +334,9 @@ void DecrbyCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) 
 }
 
 void DecrbyCmd::Do() {
-  std::string new_value;
-  nemo::Status s = g_pika_server->db()->Decrby(key_, by_, new_value);
+  nemo::Status s = g_pika_server->db()->Decrby(key_, by_, new_value_);
   if (s.ok()) {
-    res_.AppendContent(":" + new_value);
+    res_.AppendContent(":" + new_value_);
   } else if (s.IsCorruption() && s.ToString() == "Corruption: value is not a integer") {
     res_.SetRes(CmdRes::kInvalidInt);
   } else if (s.IsInvalidArgument()) {
@@ -254,6 +345,30 @@ void DecrbyCmd::Do() {
     res_.SetRes(CmdRes::kErrOther, s.ToString());
   }
   return;
+}
+
+std::string DecrbyCmd::ToBinlog(
+    const PikaCmdArgsType& argv,
+    const std::string& server_id,
+    const std::string& binlog_info,
+    bool need_send_to_hub) {
+  std::string res;
+  res.reserve(RAW_ARGS_LEN);
+  RedisAppendLen(res, 3 + 4, "*");
+
+  // to set cmd
+  std::string set_cmd("set");
+  RedisAppendLen(res, set_cmd.size(), "$");
+  RedisAppendContent(res, set_cmd);
+  // key
+  RedisAppendLen(res, key_.size(), "$");
+  RedisAppendContent(res, key_);
+  // value
+  RedisAppendLen(res, new_value_.size(), "$");
+  RedisAppendContent(res, new_value_);
+
+  AppendAffiliatedInfo(res, server_id, binlog_info, need_send_to_hub);
+  return res;
 }
 
 void GetsetCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
@@ -362,15 +477,40 @@ void SetnxCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
 }
 
 void SetnxCmd::Do() {
-  int64_t res = 0;
-  nemo::Status s = g_pika_server->db()->Setnx(key_, value_, &res);
+  nemo::Status s = g_pika_server->db()->Setnx(key_, value_, &exist_);
   if (s.ok()) {
-    res_.AppendInteger(res);
+    res_.AppendInteger(exist_);
     SlotKeyAdd("k", key_);
   } else {
     res_.SetRes(CmdRes::kErrOther, s.ToString());
   }
   return;
+}
+
+std::string SetnxCmd::ToBinlog(
+    const PikaCmdArgsType& argv,
+    const std::string& server_id,
+    const std::string& binlog_info,
+    bool need_send_to_hub) {
+  std::string res;
+  if (exist_) {
+    res.reserve(RAW_ARGS_LEN);
+    RedisAppendLen(res, 3 + 4, "*");
+
+    // to set cmd
+    std::string set_cmd("set");
+    RedisAppendLen(res, set_cmd.size(), "$");
+    RedisAppendContent(res, set_cmd);
+    // key
+    RedisAppendLen(res, key_.size(), "$");
+    RedisAppendContent(res, key_);
+    // value
+    RedisAppendLen(res, value_.size(), "$");
+    RedisAppendContent(res, value_);
+
+    AppendAffiliatedInfo(res, server_id, binlog_info, need_send_to_hub);
+  }
+  return res;
 }
 
 void SetexCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
@@ -425,6 +565,34 @@ void MsetCmd::Do() {
   } else {
     res_.SetRes(CmdRes::kErrOther, s.ToString());
   }
+}
+
+std::string MsetCmd::ToBinlog(
+    const PikaCmdArgsType& argv,
+    const std::string& server_id,
+    const std::string& binlog_info,
+    bool need_send_to_hub) {
+  std::string res;
+  res.reserve(RAW_ARGS_LEN);
+
+  std::vector<nemo::KV>::const_iterator it;
+  for (it = kvs_.begin(); it != kvs_.end(); it++) {
+    RedisAppendLen(res, 3 + 4, "*");
+
+    // to set cmd
+    std::string set_cmd("set");
+    RedisAppendLen(res, set_cmd.size(), "$");
+    RedisAppendContent(res, set_cmd);
+    // key
+    RedisAppendLen(res, it->key.size(), "$");
+    RedisAppendContent(res, it->key);
+    // value
+    RedisAppendLen(res, it->val.size(), "$");
+    RedisAppendContent(res, it->val);
+
+    AppendAffiliatedInfo(res, server_id, binlog_info, need_send_to_hub);
+  }
+  return res;
 }
 
 void MsetnxCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
@@ -578,14 +746,22 @@ void ExpireCmd::Do() {
   return;
 }
 
-void ExpireCmd::ToBinlogInternal(std::string& res, const PikaCmdArgsType& argv) {
+std::string ExpireCmd::ToBinlog(
+    const PikaCmdArgsType& argv,
+    const std::string& server_id,
+    const std::string& binlog_info,
+    bool need_send_to_hub) {
+  std::string res;
+  res.reserve(RAW_ARGS_LEN);
+  RedisAppendLen(res, argv.size() + 4, "*");
+
   // to expireat cmd
   std::string expireat_cmd("expireat");
   RedisAppendLen(res, expireat_cmd.size(), "$");
   RedisAppendContent(res, expireat_cmd);
   // key
-  RedisAppendLen(res, argv[1].size(), "$");
-  RedisAppendContent(res, argv[1]);
+  RedisAppendLen(res, key_.size(), "$");
+  RedisAppendContent(res, key_);
   // sec
   char buf[100];
   int64_t expireat = time(nullptr) + sec_;
@@ -593,6 +769,9 @@ void ExpireCmd::ToBinlogInternal(std::string& res, const PikaCmdArgsType& argv) 
   std::string at(buf);
   RedisAppendLen(res, at.size(), "$");
   RedisAppendContent(res, at);
+
+  AppendAffiliatedInfo(res, server_id, binlog_info, need_send_to_hub);
+  return res;
 }
 
 void PexpireCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
@@ -619,21 +798,32 @@ void PexpireCmd::Do() {
   return;
 }
 
-void PexpireCmd::ToBinlogInternal(std::string& res, const PikaCmdArgsType& argv) {
-  // to pexpireat cmd
-  std::string pexpireat_cmd("pexpireat");
-  RedisAppendLen(res, pexpireat_cmd.size(), "$");
-  RedisAppendContent(res, pexpireat_cmd);
+std::string PexpireCmd::ToBinlog(
+    const PikaCmdArgsType& argv,
+    const std::string& server_id,
+    const std::string& binlog_info,
+    bool need_send_to_hub) {
+  std::string res;
+  res.reserve(RAW_ARGS_LEN);
+  RedisAppendLen(res, argv.size() + 4, "*");
+
+  // to expireat cmd
+  std::string expireat_cmd("expireat");
+  RedisAppendLen(res, expireat_cmd.size(), "$");
+  RedisAppendContent(res, expireat_cmd);
   // key
-  RedisAppendLen(res, argv[1].size(), "$");
-  RedisAppendContent(res, argv[1]);
+  RedisAppendLen(res, key_.size(), "$");
+  RedisAppendContent(res, key_);
   // sec
   char buf[100];
-  int64_t pexpireat = slash::NowMicros() / 1000 + msec_;
-  slash::ll2string(buf, 100, pexpireat);
+  int64_t expireat = time(nullptr) + msec_ / 1000;
+  slash::ll2string(buf, 100, expireat);
   std::string at(buf);
   RedisAppendLen(res, at.size(), "$");
   RedisAppendContent(res, at);
+
+  AppendAffiliatedInfo(res, server_id, binlog_info, need_send_to_hub);
+  return res;
 }
 
 void ExpireatCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
@@ -670,6 +860,34 @@ void PexpireatCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_inf
     return;
   }
   return;
+}
+
+std::string PexpireatCmd::ToBinlog(
+    const PikaCmdArgsType& argv,
+    const std::string& server_id,
+    const std::string& binlog_info,
+    bool need_send_to_hub) {
+  std::string res;
+  res.reserve(RAW_ARGS_LEN);
+  RedisAppendLen(res, argv.size() + 4, "*");
+
+  // to expireat cmd
+  std::string expireat_cmd("expireat");
+  RedisAppendLen(res, expireat_cmd.size(), "$");
+  RedisAppendContent(res, expireat_cmd);
+  // key
+  RedisAppendLen(res, key_.size(), "$");
+  RedisAppendContent(res, key_);
+  // sec
+  char buf[100];
+  int64_t expireat = time(nullptr) + time_stamp_ms_ / 1000;
+  slash::ll2string(buf, 100, expireat);
+  std::string at(buf);
+  RedisAppendLen(res, at.size(), "$");
+  RedisAppendContent(res, at);
+
+  AppendAffiliatedInfo(res, server_id, binlog_info, need_send_to_hub);
+  return res;
 }
 
 void PexpireatCmd::Do() {

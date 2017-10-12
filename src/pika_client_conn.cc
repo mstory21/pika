@@ -79,7 +79,6 @@ std::string PikaClientConn::DoCmd(const std::string& opt) {
     return ""; // Monitor thread will return "OK"
   }
 
-  // std::string raw_args;
   bool need_send_to_hub = false;
   if (cinfo_ptr->is_write()) {
     if (g_pika_conf->readonly()) {
@@ -113,11 +112,14 @@ std::string PikaClientConn::DoCmd(const std::string& opt) {
       slash::PutFixed32(&binlog_info, filenum);
       slash::PutFixed64(&binlog_info, offset);
 
-      g_pika_server->logger_->Put(c_ptr->ToBinlog(
+      std::string binlog = c_ptr->ToBinlog(
           argv_,
           g_pika_conf->server_id(),
           binlog_info,
-          need_send_to_hub));
+          need_send_to_hub);
+      if (!binlog.empty()) {
+        g_pika_server->logger_->Put(binlog);
+      }
 
       g_pika_server->logger_->Unlock();
     }

@@ -404,14 +404,33 @@ class Cmd {
     return res_;
   }
 
-  std::string ToBinlog(const PikaCmdArgsType& argv, const std::string& server_id,
-                       const std::string& binlog_info, bool need_send_to_hub) {
+  virtual std::string ToBinlog(
+      const PikaCmdArgsType& argv,
+      const std::string& server_id,
+      const std::string& binlog_info,
+      bool need_send_to_hub) {
     std::string res;
     res.reserve(RAW_ARGS_LEN);
     RedisAppendLen(res, argv.size() + 4, "*");
 
-    ToBinlogInternal(res, argv);
+    for (auto& v : argv) {
+      RedisAppendLen(res, v.size(), "$");
+      RedisAppendContent(res, v);
+    }
 
+    AppendAffiliatedInfo(res, server_id, binlog_info, need_send_to_hub);
+
+    return res;
+  }
+
+ protected:
+  CmdRes res_;
+
+  void AppendAffiliatedInfo(
+      std::string& res,
+      const std::string& server_id,
+      const std::string& binlog_info,
+      bool need_send_to_hub) {
     // kPikaBinlogMagic
     RedisAppendLen(res, kPikaBinlogMagic.size(), "$");
     RedisAppendContent(res, kPikaBinlogMagic);
@@ -425,21 +444,11 @@ class Cmd {
     std::string v = need_send_to_hub ? "1" : "0";
     RedisAppendLen(res, v.size(), "$");
     RedisAppendContent(res, v);
-    return res;
   }
-
- protected:
-  CmdRes res_;
 
  private:
   virtual void DoInitial(PikaCmdArgsType &argvs, const CmdInfo* const ptr_info) = 0;
   virtual void Clear() {};
-  virtual void ToBinlogInternal(std::string& res, const PikaCmdArgsType& argv) {
-    for (auto& v : argv) {
-      RedisAppendLen(res, v.size(), "$");
-      RedisAppendContent(res, v);
-    }
-  }
 
   Cmd(const Cmd&);
   Cmd& operator=(const Cmd&);
