@@ -166,7 +166,7 @@ class SetnxCmd : public Cmd {
  private:
   std::string key_;
   std::string value_;
-  int64_t exist_;
+  int64_t success_;
   virtual void DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info);
   virtual std::string ToBinlog(
     const PikaCmdArgsType& argv,
@@ -201,12 +201,18 @@ class MsetCmd : public Cmd {
 };
 
 class MsetnxCmd : public Cmd {
-public:
+ public:
   MsetnxCmd() {}
   virtual void Do();
-private:
+ private:
   std::vector<nemo::KV> kvs_;
+  int64_t success_;
   virtual void DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info);
+  virtual std::string ToBinlog(
+      const PikaCmdArgsType& argv,
+      const std::string& server_id,
+      const std::string& binlog_info,
+      bool need_send_to_hub) override;
 };
 
 class GetrangeCmd : public Cmd {

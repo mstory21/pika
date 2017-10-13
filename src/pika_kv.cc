@@ -477,9 +477,10 @@ void SetnxCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
 }
 
 void SetnxCmd::Do() {
-  nemo::Status s = g_pika_server->db()->Setnx(key_, value_, &exist_);
+  success_ = 0;
+  nemo::Status s = g_pika_server->db()->Setnx(key_, value_, &success_);
   if (s.ok()) {
-    res_.AppendInteger(exist_);
+    res_.AppendInteger(success_);
     SlotKeyAdd("k", key_);
   } else {
     res_.SetRes(CmdRes::kErrOther, s.ToString());
@@ -493,7 +494,7 @@ std::string SetnxCmd::ToBinlog(
     const std::string& binlog_info,
     bool need_send_to_hub) {
   std::string res;
-  if (exist_) {
+  if (success_) {
     res.reserve(RAW_ARGS_LEN);
     RedisAppendLen(res, 3 + 4, "*");
 
@@ -613,10 +614,10 @@ void MsetnxCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) 
 }
 
 void MsetnxCmd::Do() {
-  int64_t res = 0;
-  nemo::Status s = g_pika_server->db()->MSetnx(kvs_, &res);
+  success_ = 0;
+  nemo::Status s = g_pika_server->db()->MSetnx(kvs_, &success_);
   if (s.ok()) {
-    res_.AppendInteger(res);
+    res_.AppendInteger(success_);
     std::vector<nemo::KV>::const_iterator it;
     for (it = kvs_.begin(); it != kvs_.end(); it++) {
       SlotKeyAdd("k", it->key);
@@ -624,6 +625,36 @@ void MsetnxCmd::Do() {
   } else {
     res_.SetRes(CmdRes::kErrOther, s.ToString());
   }
+}
+
+std::string MsetnxCmd::ToBinlog(
+    const PikaCmdArgsType& argv,
+    const std::string& server_id,
+    const std::string& binlog_info,
+    bool need_send_to_hub) {
+  std::string res;
+  if (success_) {
+    res.reserve(RAW_ARGS_LEN);
+
+    std::vector<nemo::KV>::const_iterator it;
+    for (it = kvs_.begin(); it != kvs_.end(); it++) {
+      RedisAppendLen(res, 3 + 4, "*");
+
+      // to set cmd
+      std::string set_cmd("set");
+      RedisAppendLen(res, set_cmd.size(), "$");
+      RedisAppendContent(res, set_cmd);
+      // key
+      RedisAppendLen(res, it->key.size(), "$");
+      RedisAppendContent(res, it->key);
+      // value
+      RedisAppendLen(res, it->val.size(), "$");
+      RedisAppendContent(res, it->val);
+
+      AppendAffiliatedInfo(res, server_id, binlog_info, need_send_to_hub);
+    }
+  }
+  return res;
 }
 
 void GetrangeCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
