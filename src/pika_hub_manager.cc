@@ -284,6 +284,9 @@ PikaHubSenderThread::PikaHubSenderThread(int i, PikaHubManager* manager)
     : pika_hub_manager_(manager),
       status_(UNSTARTED),
       should_reset_(false),
+      filenum_(0),
+      con_offset_(0),
+      last_record_offset_(0),
       backing_store_(new char[kBlockSize]),
       buffer_(),
       timeout_ms_(35000),
@@ -511,6 +514,7 @@ void* PikaHubSenderThread::ThreadMain() {
         LOG(INFO) << "Thread working on file: " << filenum_;
         status_ = WORKING;
         should_reset_ = false;
+        last_send_flag = true;
       }
     }
     // 1. Connect to hub
