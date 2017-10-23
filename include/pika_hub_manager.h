@@ -50,6 +50,7 @@ class PikaHubSenderThread : public pink::Thread {
     cli_->Close();
     // Close socket connnection
     cli_.reset(pink::NewRedisCli());
+    should_reset_ = true;
   }
 
  private:
@@ -154,26 +155,22 @@ class PikaHubManager {
   Status AddHub(const std::string hub_ip, int hub_port,
                 uint32_t filenum, uint64_t con_offset);
 
+  std::string hub_ip() {
+    return hub_ip_;
+  }
+
   std::string StatusToString();
 
-  void HubConnected() {
-    hub_stage_ = STARTED;
-  }
-  void StopHub(int connnection_num) {
-    if (connnection_num == 1) {
-      hub_stage_ = DEGRADE;
-    } else {
-      hub_stage_ = STOPED;
-      for (int i = 0; i < kMaxHubSender; i++) {
-        sender_threads_[i]->CloseClient();
-      }
-    }
-  }
+  void HubConnected() { hub_stage_ = STARTED; }
+  void StopHub(int connnection_num);
+
+  slash::Mutex sending_window_protector_;
 
  private:
   friend class PikaHubSenderThread;
   Status ResetSenders();
-  bool GetNextFilenum(PikaHubSenderThread* thread, uint32_t* filenum, uint64_t* con_offset);
+  bool GetNextFilenum(PikaHubSenderThread* thread,
+    uint32_t* filenum, uint64_t* con_offset);
 
   enum HUBSTAGE { STOPED, STARTING, DEGRADE, READY, STARTED };
   slash::Mutex hub_stage_protector_;
@@ -184,7 +181,6 @@ class PikaHubManager {
   uint32_t hub_filenum_;
   uint64_t hub_con_offset_;
 
-  slash::Mutex sending_window_protector_;
   struct {
     int64_t left;
     int64_t right;

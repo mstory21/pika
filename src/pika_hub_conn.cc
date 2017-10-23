@@ -46,8 +46,16 @@ int PikaHubConn::DealMessage() {
     return 0;
   }
 
+  const CmdInfo* const cinfo_ptr = GetCmdInfo(opt);
   Cmd* c_ptr = GetCmdFromTable(opt, *cmds_);
   std::string dummy_binlog_info("X");
+  if (!cinfo_ptr || !c_ptr || !(cinfo_ptr->flag_type() & kCmdFlagsKv)) {
+    // Error message
+    set_is_reply(true);
+    memcpy(wbuf_ + wbuf_len_, "-Err Fuck youself\r\n", 19);
+    wbuf_len_ += 19;
+    return 0;
+  }
 
   g_pika_server->logger_->Lock();
   g_pika_server->logger_->Put(c_ptr->ToBinlog(

@@ -294,7 +294,6 @@ void* PikaBinlogSenderThread::ThreadMain() {
         result = cli_->Send(&scratch);
         if (result.ok()) {
           last_send_flag = true;
-          LOG(INFO) << "BinlogSender send slave(" << ip_ << ":" << port_ << ") " << scratch << " " << result.ToString();
         } else {
           last_send_flag = false;
           DLOG(INFO) << "BinlogSender send slave(" << ip_ << ":" << port_ << ") failed,  " << result.ToString();
