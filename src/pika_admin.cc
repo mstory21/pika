@@ -609,6 +609,7 @@ void InfoCmd::InfoServer(std::string &info) {
   tmp_stream << "uptime_in_seconds:" << (current_time_s - g_pika_server->start_time_s()) << "\r\n";
   tmp_stream << "uptime_in_days:" << (current_time_s / (24*3600) - g_pika_server->start_time_s() / (24*3600) + 1) << "\r\n";
   tmp_stream << "config_file:" << g_pika_conf->conf_path() << "\r\n";
+  tmp_stream << "server_id:" << g_pika_conf->server_id() << "\r\n";
 
   info.append(tmp_stream.str());
 }
@@ -718,9 +719,9 @@ void InfoCmd::InfoDoubleMaster(std::string &info) {
 
   tmp_stream << "the peer-master host:" << g_pika_conf->double_master_ip() << "\r\n";
   tmp_stream << "the peer-master port:" << g_pika_conf->double_master_port() << "\r\n";
+  tmp_stream << "the peer-master server_id:" << g_pika_server->DoubleMasterSid() << "\r\n";
   tmp_stream << "double_master_mode: " << (g_pika_server->DoubleMasterMode() ? "True" : "False") << "\r\n";
   tmp_stream << "repl_state: " << (g_pika_server->repl_state()) << "\r\n";
-  tmp_stream << "double_master_server_id:" << g_pika_server->DoubleMasterSid() << "\r\n";
   uint64_t double_recv_offset;
   uint32_t double_recv_num;
   g_pika_server->logger_->GetDoubleRecvInfo(&double_recv_num, &double_recv_offset);
