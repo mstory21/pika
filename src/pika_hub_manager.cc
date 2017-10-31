@@ -66,12 +66,12 @@ Status PikaHubManager::AddHub(const std::string hub_ip, int hub_port,
   hub_port_ = hub_port;
 
   Status s = ResetSenders();
-  hub_stage_ = s.ok() ? READY : STOPED;
+  hub_stage_ = s.ok() ? DEGRADE : STOPED;
   return s;
 }
 
 Status PikaHubManager::ResetSenders() {
-  assert(hub_stage_ < READY);
+  assert(hub_stage_ < STARTED);
   // Sanitize
   uint32_t cur_filenum = 0;
   uint64_t cur_offset = 0;
@@ -115,7 +115,7 @@ bool PikaHubManager::GetNextFilenum(
   bool should_wait = true;
   {
   slash::MutexLock l(&hub_stage_protector_);
-  if (hub_stage_ < READY) {
+  if (hub_stage_ < STARTED) {
     // STOPED, STARTING, DEGRADE
     return should_wait;
   }
@@ -171,9 +171,10 @@ std::string PikaHubManager::StatusToString() {
   std::stringstream tmp_stream;
   const std::string CRLF = "\r\n";
 
-  tmp_stream << "sending window: " <<
+  tmp_stream << "Connected hub: " << hub_ip_ << ":" << hub_port_ << CRLF;
+  tmp_stream << "Sending window: " <<
     sending_window_.left << " - " << sending_window_.right << CRLF;
-  tmp_stream << "hub senders' map: " << CRLF;
+  tmp_stream << "Hub senders' map: " << CRLF;
   for (auto& info : working_map_) {
     std::string status;
     auto sender = info.first;
@@ -208,14 +209,11 @@ std::string PikaHubManager::StatusToString() {
     case DEGRADE:
       stage.assign("DEGRADE");
       break;
-    case READY:
-      stage.assign("READY");
-      break;
     case STARTED:
       stage.assign("STARTED");
       break;
   }
-  tmp_stream << "hub stage: " << stage << CRLF;
+  tmp_stream << "Hub stage: " << stage << CRLF;
 
   return tmp_stream.str();
 }

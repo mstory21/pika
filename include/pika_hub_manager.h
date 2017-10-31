@@ -172,7 +172,7 @@ class PikaHubManager {
   bool GetNextFilenum(PikaHubSenderThread* thread,
     uint32_t* filenum, uint64_t* con_offset);
 
-  enum HUBSTAGE { STOPED, STARTING, DEGRADE, READY, STARTED };
+  enum HUBSTAGE { STOPED, STARTING, DEGRADE, STARTED };
   slash::Mutex hub_stage_protector_;
   HUBSTAGE hub_stage_;
   std::string hub_ip_;
