@@ -1,20 +1,18 @@
-FROM centos:latest
-MAINTAINER left2right <yqzhang@easemob.com>
+FROM alpine:3.7 as builder
 
-RUN rpm -ivh https://mirrors.ustc.edu.cn/epel/epel-release-latest-7.noarch.rpm && \
-    yum -y update && \
-    yum -y install snappy-devel && \
-    yum -y install protobuf-devel && \
-    yum -y install gflags-devel && \
-    yum -y install glog-devel && \
-    yum -y install gcc-c++ && \
-    yum -y install make && \
-    yum -y install git
+RUN apk --no-cache add alpine-sdk snappy protobuf file
 
 ENV PIKA  /pika
 COPY . ${PIKA}
 WORKDIR ${PIKA}
-RUN make
+RUN make DISABLE_UPDATE_SB=1 360=1 V=1
 ENV PATH ${PIKA}/output/bin:${PATH}
+
+FROM alpine:3.7
+ENV PIKA  /pika
+
+RUN apk --no-cache add snappy protobuf
+
+COPY --from=builder ${PIKA}/output ${PIKA}/output
 
 WORKDIR ${PIKA}/output

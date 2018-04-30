@@ -52,7 +52,9 @@ PikaServer::PikaServer() :
 
   pthread_rwlockattr_t attr;
   pthread_rwlockattr_init(&attr);
+#ifdef PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP
   pthread_rwlockattr_setkind_np(&attr, PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP);
+#endif
   pthread_rwlock_init(&rwlock_, &attr);
 
   //Init server ip host

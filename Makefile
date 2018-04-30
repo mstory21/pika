@@ -1,10 +1,15 @@
 CLEAN_FILES = # deliberately empty, so we can append below.
 CXX=g++
 PLATFORM_LDFLAGS= -lpthread -lrt
-PLATFORM_CXXFLAGS= -std=c++11 -fno-builtin-memcmp -msse -msse4.2 
+PLATFORM_CXXFLAGS= -std=c++11 -fno-builtin-memcmp -msse -msse4.2
 PROFILING_FLAGS=-pg
 OPT=
-LDFLAGS += -Wl,-rpath=$(RPATH)
+#LDFLAGS += -Wl,-Bstatic
+#LDFLAGS += -Wl,--no-dynamic-linker
+#LDFLAGS += -Wl,-rpath=$(RPATH)
+#LDFLAGS += -fno-PIC
+
+$(info $(shell g++ --version))
 
 # DEBUG_LEVEL can have two values:
 # * DEBUG_LEVEL=2; this is the ultimate debug mode. It will compile pika
@@ -214,7 +219,8 @@ $(BINARY): $(SLASH) $(PINK) $(ROCKSDB) $(NEMODB) $(NEMO) $(GLOG) $(LIBOBJECTS)
 	$(AM_V_at)mkdir -p $(OUTPUT)/bin
 	$(AM_V_at)mv $@ $(OUTPUT)/bin
 	$(AM_V_at)cp -r $(CURDIR)/conf $(OUTPUT)
-	
+	$(AM_V_at)mkdir -p $(OUTPUT)/lib
+	$(AM_V_at)cp -r $(CURDIR)/third/*/lib/* $(OUTPUT)/lib
 
 $(SLASH):
 	$(AM_V_at)make -C $(SLASH_PATH)/slash/ DEBUG_LEVEL=$(DEBUG_LEVEL)
